@@ -20,6 +20,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/hooks/useAuth";
 import { signOut } from "@/lib/auth-client";
 import { usePathname } from "next/navigation";
+import { type UserRole } from "@/lib/roles";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 
 const menuItems = [
   {
@@ -27,32 +30,43 @@ const menuItems = [
     url: "/inbox",
     icon: MessageSquare,
     testId: "nav-inbox",
+    roles: ["VIEWER", "EDITOR", "ADMIN"] as UserRole[],
   },
   {
     title: "Contacts",
     url: "/contacts",
     icon: Users,
     testId: "nav-contacts",
+    roles: ["VIEWER", "EDITOR", "ADMIN"] as UserRole[],
   },
   {
     title: "Analytics",
     url: "/analytics",
     icon: BarChart3,
     testId: "nav-analytics",
+    roles: ["EDITOR", "ADMIN"] as UserRole[],
   },
   {
     title: "Settings",
     url: "/settings",
     icon: Settings,
     testId: "nav-settings",
+    roles: ["ADMIN"] as UserRole[],
   },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    // Use requestAnimationFrame to avoid synchronous setState warning
+    requestAnimationFrame(() => setMounted(true));
+  }, []);
 
   const getInitials = () => {
+    if (!mounted) return "U";
     if (user?.firstName && user?.lastName) {
       return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
     }
@@ -63,6 +77,7 @@ export function AppSidebar() {
   };
 
   const getDisplayName = () => {
+    if (!mounted) return "User";
     if (user?.firstName && user?.lastName) {
       return `${user.firstName} ${user.lastName}`;
     }
@@ -88,20 +103,25 @@ export function AppSidebar() {
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.url}
-                    data-testid={item.testId}
-                  >
-                    <a href={item.url}>
-                      <item.icon className="w-5 h-5" />
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {menuItems
+                .filter(
+                  (item) =>
+                    !mounted || item.roles.includes(user?.role as UserRole)
+                )
+                .map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname === item.url}
+                      data-testid={item.testId}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="w-5 h-5" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -129,13 +149,13 @@ export function AppSidebar() {
                   className="text-xs text-muted-foreground truncate"
                   data-testid="text-user-role"
                 >
-                  {user?.role || "Viewer"}
+                  {mounted ? user?.role || "Viewer" : "Viewer"}
                 </p>
               </div>
             </div>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton 
+            <SidebarMenuButton
               onClick={() => signOut()}
               data-testid="button-logout"
             >

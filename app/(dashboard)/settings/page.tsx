@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+"use client";
+import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -16,6 +17,11 @@ import { Phone, Key, Shield, Info } from "lucide-react";
 export default function Settings() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -24,13 +30,31 @@ export default function Settings() {
         description: "You are logged out. Logging in again...",
       });
       setTimeout(() => {
-        window.location.href = "/api/login";
+        window.location.href = "/login";
       }, 500);
     }
   }, [isAuthenticated, authLoading, toast]);
 
-  if (authLoading) {
-    return null;
+  if (authLoading || !mounted) {
+    return (
+      <div className="h-full flex flex-col overflow-auto">
+        <div className="border-b px-6 lg:px-8 py-6">
+          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your account and integration settings
+          </p>
+        </div>
+        <div className="flex-1 px-6 lg:px-8 py-6">
+          <div className="max-w-4xl space-y-6">
+            <div className="animate-pulse space-y-4">
+              <div className="h-32 bg-muted rounded-lg"></div>
+              <div className="h-32 bg-muted rounded-lg"></div>
+              <div className="h-32 bg-muted rounded-lg"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -58,7 +82,7 @@ export default function Settings() {
                   <Label htmlFor="first-name">First Name</Label>
                   <Input
                     id="first-name"
-                    value={user?.firstName || ""}
+                    value={mounted ? (user?.firstName || "") : ""}
                     disabled
                     data-testid="input-first-name"
                   />
@@ -67,7 +91,7 @@ export default function Settings() {
                   <Label htmlFor="last-name">Last Name</Label>
                   <Input
                     id="last-name"
-                    value={user?.lastName || ""}
+                    value={mounted ? (user?.lastName || "") : ""}
                     disabled
                     data-testid="input-last-name"
                   />
@@ -78,7 +102,7 @@ export default function Settings() {
                 <Input
                   id="email"
                   type="email"
-                  value={user?.email || ""}
+                  value={mounted ? (user?.email || "") : ""}
                   disabled
                   data-testid="input-email"
                 />
@@ -88,13 +112,13 @@ export default function Settings() {
                 <div className="flex items-center gap-2">
                   <Input
                     id="role"
-                    value={user?.role || "VIEWER"}
+                    value={mounted ? (user?.role || "VIEWER") : "VIEWER"}
                     disabled
                     className="flex-1"
                     data-testid="input-role"
                   />
                   <Badge variant="outline" className="capitalize">
-                    {user?.role?.toLowerCase() || "viewer"}
+                    {mounted ? (user?.role?.toLowerCase() || "viewer") : "viewer"}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -156,7 +180,7 @@ export default function Settings() {
                 <Label htmlFor="twilio-phone">Phone Number</Label>
                 <Input
                   id="twilio-phone"
-                  value={process.env.TWILIO_PHONE_NUMBER || "Not configured"}
+                  value="Not configured"
                   disabled
                   data-testid="input-twilio-phone"
                 />

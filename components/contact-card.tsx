@@ -1,63 +1,114 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MentionEditor } from "@/components/mention-editor";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Phone, User, StickyNote } from "lucide-react";
+import { Mail, Phone, StickyNote } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Contact, Note } from "@/shared/schema";
+import { RoleGuard } from "@/components/role-guard";
+import { supabase } from "@/lib/supabase";
 
 interface ContactCardProps {
-  contactId: string;
+  threadId: string;
+  selectedContact: Contact | null;
 }
 
-export function ContactCard({ contactId }: ContactCardProps) {
+export function ContactCard({ threadId, selectedContact }: ContactCardProps) {
   const { toast } = useToast();
+
   const queryClient = useQueryClient();
   const [noteContent, setNoteContent] = useState("");
 
-  const { data: contact, isLoading: contactLoading } = useQuery<Contact>({
-    queryKey: ["/api/contacts", contactId],
+  const { data: notes, isLoading: notesLoading } = useQuery<any>({
+    queryKey: ["/api/notes", threadId],
+    queryFn: async () => {
+      const response = await apiRequest(
+        "GET",
+        `/api/notes?threadId=${threadId}`
+      );
+      return await response.json();
+    },
     retry: false,
   });
 
-  const { data: notes, isLoading: notesLoading } = useQuery<Note[]>({
-    queryKey: ["/api/notes", contactId],
-    retry: false,
-  });
+  // Subscribe to real-time notes updates
+  useEffect(() => {
+    const channel = supabase
+      .channel("notes-changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "Note",
+          filter: `threadId=eq.${threadId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["/api/notes", threadId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [threadId, queryClient]);
 
   const addNoteMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest("POST", "/api/notes", {
-        contactId,
+      const response = await apiRequest("POST", "/api/notes", {
+        threadId,
         content: noteContent,
         isPrivate: false,
       });
+      return response;
+    },
+    onMutate: async () => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["/api/notes", threadId] });
+
+      // Snapshot previous value
+      const previousNotes = queryClient.getQueryData(["/api/notes", threadId]);
+
+      // Optimistically update
+      const optimisticNote = {
+        id: `temp-${Date.now()}`,
+        content: noteContent,
+        body: noteContent,
+        createdAt: new Date().toISOString(),
+        isPrivate: false,
+        author: { name: "You", email: "" },
+      };
+
+      queryClient.setQueryData(["/api/notes", threadId], (old: any) => {
+        if (Array.isArray(old)) {
+          return [optimisticNote, ...old];
+        }
+        if (old?.notes) {
+          return { ...old, notes: [optimisticNote, ...old.notes] };
+        }
+        return [optimisticNote];
+      });
+
+      return { previousNotes };
     },
     onSuccess: () => {
       setNoteContent("");
-      toast.success({
-        title: "Note added",
-        description: "Your note has been saved successfully.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/notes", contactId] });
     },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast.error({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
+    onError: (error: Error, variables, context) => {
+      // Rollback on error
+      if (context?.previousNotes) {
+        queryClient.setQueryData(
+          ["/api/notes", threadId],
+          context.previousNotes
+        );
       }
       toast.error({
         title: "Failed to add note",
@@ -66,68 +117,36 @@ export function ContactCard({ contactId }: ContactCardProps) {
     },
   });
 
-  const getInitials = (name?: string | null) => {
-    if (!name) return "?";
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  if (contactLoading) {
-    return (
-      <div className="p-6">
-        <div className="flex flex-col items-center mb-6">
-          <Skeleton className="w-16 h-16 rounded-full mb-4" />
-          <Skeleton className="h-6 w-32 mb-2" />
-          <Skeleton className="h-4 w-24" />
-        </div>
-        <div className="space-y-4">
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-10 w-full" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!contact) {
-    return (
-      <div className="p-6 text-center">
-        <p className="text-muted-foreground">Contact not found</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col h-full">
       <div className="p-6 border-b">
         <div className="flex flex-col items-center mb-6">
-          <Avatar className="w-16 h-16 mb-4">
-            <AvatarImage src={undefined} alt={contact.name || "Contact"} />
+          {/* <Avatar className="w-16 h-16 mb-4">
+            <AvatarImage
+              src={undefined}
+              alt={selectedContact?.name || "Contact"}
+            />
             <AvatarFallback className="text-lg">
-              {getInitials(contact.name)}
+              {getInitials(selectedContact?.name)}
             </AvatarFallback>
-          </Avatar>
+          </Avatar> */}
           <h3 className="text-lg font-semibold" data-testid="contact-name">
-            {contact.name || "Unknown Contact"}
+            {selectedContact?.name || "Unknown Contact"}
           </h3>
           <p className="text-sm text-muted-foreground">Contact Details</p>
         </div>
 
         <div className="space-y-3">
-          {contact.phone && (
+          {selectedContact?.phone && (
             <div className="flex items-center gap-3 text-sm">
               <Phone className="w-4 h-4 text-muted-foreground" />
-              <span data-testid="contact-phone">{contact.phone}</span>
+              <span data-testid="contact-phone">{selectedContact?.phone}</span>
             </div>
           )}
-          {contact.email && (
+          {selectedContact?.email && (
             <div className="flex items-center gap-3 text-sm">
               <Mail className="w-4 h-4 text-muted-foreground" />
-              <span data-testid="contact-email">{contact.email}</span>
-            </div>
-          )}
-          {contact.socialHandle && (
-            <div className="flex items-center gap-3 text-sm">
-              <User className="w-4 h-4 text-muted-foreground" />
-              <span data-testid="contact-social">{contact.socialHandle}</span>
+              <span data-testid="contact-email">{selectedContact?.email}</span>
             </div>
           )}
         </div>
@@ -140,63 +159,77 @@ export function ContactCard({ contactId }: ContactCardProps) {
         </div>
 
         <ScrollArea className="flex-1 -mx-2 px-2 mb-4">
-          {notesLoading ? (
+          {notesLoading && (
             <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="bg-muted rounded-lg p-3">
+              {Array.from({ length: 3 }, (_, i) => (
+                <div
+                  key={`loading-skeleton-${i}`}
+                  className="bg-muted rounded-lg p-3"
+                >
                   <Skeleton className="h-4 w-full mb-2" />
                   <Skeleton className="h-3 w-24" />
                 </div>
               ))}
             </div>
-          ) : notes && notes.length > 0 ? (
-            <div className="space-y-3">
-              {notes.map((note) => (
-                <div
-                  key={note.id}
-                  className="bg-muted rounded-lg p-3"
-                  data-testid={`note-${note.id}`}
-                >
-                  <p className="text-sm mb-2">{note.content}</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(note.createdAt), {
-                        addSuffix: true,
-                      })}
-                    </p>
-                    {note.isPrivate && (
-                      <Badge variant="outline" className="text-xs">
-                        Private
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              No notes yet
-            </p>
           )}
+          {!notesLoading &&
+            ((notes?.notes && notes.notes.length > 0) ||
+              (Array.isArray(notes) && notes.length > 0)) && (
+              <div className="space-y-3">
+                {(notes?.notes || notes)?.map(
+                  (
+                    note: Note & { author: { name: string; email: string } }
+                  ) => (
+                    <div
+                      key={note.id}
+                      className="bg-muted rounded-lg p-3"
+                      data-testid={`note-${note.id}`}
+                    >
+                      <p className="text-sm mb-2">{note.body}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(note.createdAt), {
+                            addSuffix: true,
+                          })}
+                        </p>
+                        {note.isPrivate && (
+                          <Badge variant="outline" className="text-xs">
+                            Private
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          {!notesLoading &&
+            (!notes?.notes || notes.notes.length === 0) &&
+            (!Array.isArray(notes) || notes.length === 0) && (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No notes yet
+              </p>
+            )}
         </ScrollArea>
 
-        <div className="space-y-2">
-          <Textarea
-            value={noteContent}
-            onChange={(e) => setNoteContent(e.target.value)}
-            placeholder="Add a note about this contact..."
-            className="min-h-[80px] resize-none"
-            data-testid="input-note"
-          />
-          <Button
-            onClick={() => addNoteMutation.mutate()}
-            disabled={!noteContent.trim() || addNoteMutation.isPending}
-            className="w-full"
-            data-testid="button-add-note"
-          >
-            Add Note
-          </Button>
-        </div>
+        <RoleGuard permission="canEdit">
+          <div className="space-y-2">
+            <MentionEditor
+              value={noteContent}
+              onChange={setNoteContent}
+              placeholder="Add a note about this contact... (use @ to mention team members)"
+              className="min-h-[80px] resize-none"
+            />
+            <Button
+              onClick={() => addNoteMutation.mutate()}
+              disabled={!noteContent.trim() || addNoteMutation.isPending}
+              className="w-full"
+              data-testid="button-add-note"
+            >
+              Add Note
+            </Button>
+          </div>
+        </RoleGuard>
       </div>
     </div>
   );

@@ -1,0 +1,177 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  avatarUrl     String?
+  role          Role      @default(VIEWER)
+  notes         Note[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  emailVerified Boolean   @default(false)
+  image         String?
+  sessions      Session[]
+  accounts      Account[]
+
+  @@map("user")
+}
+
+enum Role {
+  VIEWER
+  EDITOR
+  ADMIN
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  name      String?
+  phone     String?  @unique
+  email     String?  @unique
+  meta      Json?
+  threads   Thread[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Channel {
+  SMS
+  WHATSAPP
+  EMAIL
+  TWITTER
+  FACEBOOK
+  OTHER
+}
+
+model Thread {
+  id            String    @id @default(cuid())
+  contact       Contact   @relation(fields: [contactId], references: [id])
+  contactId     String
+  channel       Channel
+  unread        Boolean   @default(true)
+  lastMessageAt DateTime?
+  messages      Message[]
+  notes         Note[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  QUEUED
+  SENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+model Message {
+  id          String        @id @default(cuid())
+  thread      Thread        @relation(fields: [threadId], references: [id])
+  threadId    String
+  direction   Direction
+  channel     Channel
+  body        String?
+  media       String[]      @default([])
+  from        String
+  to          String
+  status      MessageStatus @default(QUEUED)
+  channelMeta Json?
+  createdAt   DateTime      @default(now())
+  receivedAt  DateTime?
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  thread    Thread   @relation(fields: [threadId], references: [id])
+  threadId  String
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  body      String
+  isPrivate Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ScheduledMessage {
+  id          String    @id @default(cuid())
+  threadId    String?
+  contactId   String
+  channel     Channel
+  body        String
+  media       String[]  @default([])
+  scheduledAt DateTime
+  status      JobStatus @default(PENDING)
+  createdAt   DateTime  @default(now())
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@map("verification")
+}

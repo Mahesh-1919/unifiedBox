@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Mail, Twitter, Facebook, Phone } from "lucide-react";
 
-type Channel = "SMS" | "WHATSAPP" | "EMAIL" | "TWITTER" | "FACEBOOK";
+type Channel = "SMS" | "WHATSAPP" | "EMAIL" | "TWITTER" | "FACEBOOK" | "OTHER";
 
 interface ChannelBadgeProps {
   channel: Channel;
@@ -34,6 +34,11 @@ const channelConfig = {
     label: "Facebook",
     className: "bg-chart-5/10 text-chart-5 border-chart-5/20",
   },
+  OTHER: {
+    icon: Facebook,
+    label: "Facebook",
+    className: "bg-chart-5/10 text-chart-5 border-chart-5/20",
+  },
 };
 
 export function ChannelBadge({ channel, className }: ChannelBadgeProps) {
@@ -41,7 +46,10 @@ export function ChannelBadge({ channel, className }: ChannelBadgeProps) {
   const Icon = config.icon;
 
   return (
-    <Badge variant="outline" className={`${config.className} ${className || ""}`}>
+    <Badge
+      variant="outline"
+      className={`${config.className} ${className || ""}`}
+    >
       <Icon className="w-3 h-3 mr-1" />
       {config.label}
     </Badge>

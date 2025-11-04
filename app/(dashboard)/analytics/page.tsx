@@ -1,9 +1,9 @@
 "use client";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { isUnauthorizedError } from "@/lib/authUtils";
 import {
   Card,
   CardContent,
@@ -25,40 +25,34 @@ import {
   Cell,
 } from "recharts";
 import { MessageSquare, Users, Clock, TrendingUp } from "lucide-react";
-import type { AnalyticsData } from "@/shared/schema";
 
 export default function Analytics() {
   const { toast } = useToast();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
-  // useEffect(() => {
-  //   if (!authLoading && !isAuthenticated) {
-  //     toast.error({
-  //       title: "Unauthorized",
-  //       description: "You are logged out. Logging in again...",
-  //     });
-  //     setTimeout(() => {
-  //       window.location.href = "/api/login";
-  //     }, 500);
-  //   }
-  // }, [isAuthenticated, authLoading, toast]);
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      toast.error({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+      });
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 500);
+    }
+  }, [isAuthenticated, authLoading, toast]);
 
-  const { data: analytics, isLoading } = useQuery<AnalyticsData>({
+  const { data: analytics, isLoading } = useQuery<any>({
     queryKey: ["/api/analytics"],
-    retry: false,
   });
 
   const CHANNEL_COLORS = {
-    SMS: "hsl(var(--chart-1))",
-    WHATSAPP: "hsl(var(--chart-2))",
-    EMAIL: "hsl(var(--chart-3))",
-    TWITTER: "hsl(var(--chart-4))",
-    FACEBOOK: "hsl(var(--chart-5))",
+    SMS: "#3b82f6",
+    WHATSAPP: "#10b981",
+    EMAIL: "#f59e0b",
+    TWITTER: "#8b5cf6",
+    FACEBOOK: "#ef4444",
   };
-
-  if (authLoading) {
-    return null;
-  }
 
   return (
     <div className="h-full flex flex-col overflow-auto">
@@ -203,40 +197,43 @@ export default function Analytics() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-64 w-full" />
-              ) : analytics?.messagesByChannel &&
-                analytics.messagesByChannel.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <PieChart>
-                    <Pie
-                      data={analytics.messagesByChannel}
-                      dataKey="count"
-                      nameKey="channel"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label={(entry) => `${entry.channel}: ${entry.count}`}
-                    >
-                      {analytics.messagesByChannel.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={
-                            CHANNEL_COLORS[
-                              entry.channel as keyof typeof CHANNEL_COLORS
-                            ] || "hsl(var(--chart-1))"
-                          }
-                        />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-64 flex items-center justify-center text-muted-foreground">
-                  No channel data available
-                </div>
-              )}
+              {isLoading && <Skeleton className="h-64 w-full" />}
+              {!isLoading &&
+                analytics?.messagesByChannel &&
+                analytics.messagesByChannel.length > 0 && (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={analytics.messagesByChannel}
+                        dataKey="count"
+                        nameKey="channel"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label={(entry) => `${entry.channel}: ${entry.count}`}
+                      >
+                        {analytics.messagesByChannel.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={
+                              CHANNEL_COLORS[
+                                entry.channel as keyof typeof CHANNEL_COLORS
+                              ] || "#3b82f6"
+                            }
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
+              {!isLoading &&
+                (!analytics?.messagesByChannel ||
+                  analytics.messagesByChannel.length === 0) && (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    No channel data available
+                  </div>
+                )}
             </CardContent>
           </Card>
 
@@ -246,103 +243,34 @@ export default function Analytics() {
               <CardDescription>Daily message volume trends</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading ? (
-                <Skeleton className="h-64 w-full" />
-              ) : analytics?.messagesOverTime &&
-                analytics.messagesOverTime.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <BarChart data={analytics.messagesOverTime}>
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      stroke="hsl(var(--border))"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                    />
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--popover))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "var(--radius)",
-                      }}
-                    />
-                    <Bar
-                      dataKey="count"
-                      fill="hsl(var(--chart-1))"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-64 flex items-center justify-center text-muted-foreground">
-                  No timeline data available
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Insights */}
-        <div className="mt-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Key Insights</CardTitle>
-              <CardDescription>
-                Performance highlights and recommendations
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {isLoading ? (
-                  [...Array(3)].map((_, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <Skeleton className="w-2 h-2 rounded-full mt-2" />
-                      <Skeleton className="h-4 flex-1" />
-                    </div>
-                  ))
-                ) : (
-                  <>
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-chart-1 mt-2"></div>
-                      <p className="text-sm text-muted-foreground">
-                        You have{" "}
-                        <span className="font-semibold text-foreground">
-                          {analytics?.totalMessages || 0} total messages
-                        </span>{" "}
-                        across all channels
-                      </p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-chart-2 mt-2"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Average response time is{" "}
-                        <span className="font-semibold text-foreground">
-                          {analytics?.averageResponseTime
-                            ? `${Math.round(
-                                analytics.averageResponseTime
-                              )} minutes`
-                            : "not available"}
-                        </span>
-                      </p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-2 h-2 rounded-full bg-chart-3 mt-2"></div>
-                      <p className="text-sm text-muted-foreground">
-                        Managing conversations with{" "}
-                        <span className="font-semibold text-foreground">
-                          {analytics?.totalContacts || 0} contacts
-                        </span>
-                      </p>
-                    </div>
-                  </>
+              {isLoading && <Skeleton className="h-64 w-full" />}
+              {!isLoading &&
+                analytics?.messagesOverTime &&
+                analytics.messagesOverTime.length > 0 && (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={analytics.messagesOverTime}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "white",
+                          border: "1px solid #ccc",
+                          borderRadius: "4px",
+                          color: "black",
+                        }}
+                      />
+                      <Bar dataKey="count" fill="hsl(var(--chart-1))" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 )}
-              </div>
+              {!isLoading &&
+                (!analytics?.messagesOverTime ||
+                  analytics.messagesOverTime.length === 0) && (
+                  <div className="h-64 flex items-center justify-center text-muted-foreground">
+                    No time series data available
+                  </div>
+                )}
             </CardContent>
           </Card>
         </div>
