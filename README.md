@@ -84,12 +84,12 @@ User Schedule → Database Storage → Cron Job → Channel Send → Status Upda
 
 - **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript
 - **Backend**: Next.js API routes + Prisma ORM
-- **Database**: PostgreSQL with migrations
+- **Database**: Supabase PostgreSQL with real-time subscriptions
 - **Authentication**: Better Auth with sessions
 - **Messaging**: Twilio SDK for SMS/WhatsApp
 - **State**: TanStack Query + Zustand
 - **UI**: Tailwind CSS + Radix UI components
-- **Deployment**: Vercel with cron jobs
+- **Deployment**: Vercel with Supabase Edge Functions for cron jobs
 
 ### Key Features
 
@@ -110,11 +110,12 @@ User Schedule → Database Storage → Cron Job → Channel Send → Status Upda
 ### Key Technical Decisions
 
 - **Twilio Integration**: Chosen for unified SMS/WhatsApp API and global reach
-- **PostgreSQL**: Selected for ACID compliance and complex relationship handling
+- **Supabase PostgreSQL**: Selected for ACID compliance, real-time subscriptions, and managed hosting
 - **Better Auth**: Implemented for secure authentication with role-based access
 - **Zod Validation**: Used for type-safe validation across client and server
 - **TanStack Query**: Adopted for optimized caching and real-time updates
-- **Vercel Deployment**: Chosen for seamless Next.js integration and cron jobs
+- **Supabase Edge Functions**: Used for scheduled message processing and background jobs
+- **Vercel Deployment**: Chosen for seamless Next.js integration and global CDN
 
 ## System Architecture
 
@@ -193,7 +194,7 @@ erDiagram
 
 1. **Inbound Messages**: Twilio → Webhook → Database → Real-time UI
 2. **Outbound Messages**: UI → Validation → Twilio API → Database → Status Update
-3. **Scheduled Messages**: UI → Database → Cron Job → Twilio API → Status Update
+3. **Scheduled Messages**: UI → Database → Supabase Edge Function → Twilio API → Status Update
 4. **Team Notes**: UI → Database → Supabase Real-time → UI Updates
 
 ## Contributing
